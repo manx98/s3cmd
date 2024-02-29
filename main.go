@@ -37,6 +37,23 @@ type TerminalVars struct {
 	Ctx context.Context
 }
 
+func (t *TerminalVars) Confirm(tip string) bool {
+	for {
+		fmt.Print(tip + " (y/n): ")
+		reader := bufio.NewReader(os.Stdin)
+		text, _ := reader.ReadString('\n')
+		text = strings.Trim(text, " \r\n")
+		switch text {
+		case "y", "Y":
+			return true
+		case "n", "N":
+			return false
+		default:
+			fmt.Println("请输入y或n")
+		}
+	}
+}
+
 type CommandHandler func(vars *TerminalVars, param string) bool
 
 type Command struct {

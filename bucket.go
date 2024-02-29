@@ -12,6 +12,7 @@ func init() {
 	RegisterCommand("mk", "创建Bucket: mk [<bucket name>]", createBucket)
 	RegisterCommand("rm", "删除Bucket: rm [<bucket name>]、删除bucket下元素: rm [<bucket name>]/[<object name>]", rb)
 	RegisterCommand("count", "计算Bucket信息: count [<bucket name>]", count)
+	RegisterCommand("empty", "清空Bucket", emptyBucket)
 }
 
 func formatBytes(size int64) string {
@@ -65,11 +66,13 @@ func removeBucket(vars *TerminalVars, bucketName string) bool {
 	if bucketName == "" {
 		fmt.Println("删除失败：Bucket名称不能为空")
 	} else {
-		err := client.RemoveBucketWithOptions(vars.Ctx, bucketName, minio.RemoveBucketOptions{ForceDelete: true})
-		if err != nil {
-			fmt.Printf("删除Bucket失败: %v\n", err)
-		} else {
-			fmt.Println("删除Bucket成功")
+		if vars.Confirm(fmt.Sprintf("正在Bucket[%s]", bucketName)) {
+			err := client.RemoveBucketWithOptions(vars.Ctx, bucketName, minio.RemoveBucketOptions{ForceDelete: true})
+			if err != nil {
+				fmt.Printf("删除Bucket失败: %v\n", err)
+			} else {
+				fmt.Println("删除Bucket成功")
+			}
 		}
 	}
 	return true
@@ -79,11 +82,13 @@ func removeObject(vars *TerminalVars, bucketName, objectName string) bool {
 	if bucketName == "" || objectName == "" {
 		fmt.Println("删除Object失败：Bucket名称或Object名称不能为空")
 	} else {
-		err := client.RemoveObject(vars.Ctx, bucketName, objectName, minio.RemoveObjectOptions{})
-		if err != nil {
-			fmt.Printf("删除Object失败: %v\n", err)
-		} else {
-			fmt.Println("删除Object成功")
+		if vars.Confirm(fmt.Sprintf("正在删除%s下%s", bucketName, objectName)) {
+			err := client.RemoveObject(vars.Ctx, bucketName, objectName, minio.RemoveObjectOptions{})
+			if err != nil {
+				fmt.Printf("删除Object失败: %v\n", err)
+			} else {
+				fmt.Println("删除Object成功")
+			}
 		}
 	}
 	return true
@@ -171,6 +176,34 @@ func countBucketObjects(vars *TerminalVars, bucketName string) bool {
 	} else {
 		fmt.Printf("Bucket: %s\n", bucketName)
 		return listBucketObjects(vars, bucketName, false)
+	}
+	return true
+}
+
+func emptyBucket(vars *TerminalVars, bucketName string) bool {
+	if bucketName == "" {
+		fmt.Println("Bucket名称不能为空")
+	} else {
+		if vars.Confirm("清空Bucket?") {
+			objects := client.ListObjects(vars.Ctx, bucketName, minio.ListObjectsOptions{
+				Recursive: true,
+			})
+			removeObjects := client.RemoveObjects(vars.Ctx, bucketName, objects, minio.RemoveObjectsOptions{})
+			for {
+				select {
+				case obj, ok := <-removeObjects:
+					if ok {
+						if obj.Err != nil {
+							fmt.Printf("清空Bucket失败: %v\n", obj.Err)
+							return true
+						}
+					} else {
+						fmt.Println("清空Bucket成功")
+						return true
+					}
+				}
+			}
+		}
 	}
 	return true
 }
